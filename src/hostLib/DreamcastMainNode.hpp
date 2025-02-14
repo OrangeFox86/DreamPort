@@ -69,6 +69,9 @@ class DreamcastMainNode : public DreamcastNode
         //! @param[in] currentTimeUs  The current time as number of microseconds
         void disconnectMainPeripheral(uint64_t currentTimeUs);
 
+        //! Prints summary of all devices
+        void printSummary();
+
     private:
         //! Execute and process read task from the timeliner
         //! @param[in] currentTimeUs  The current time in microseconds
@@ -100,4 +103,6 @@ class DreamcastMainNode : public DreamcastNode
         int64_t mScheduleId;
         //! Current count of number of communication failures
         uint32_t mCommFailCount;
+        //! Print summary on next cycle when true
+        bool mPrintSummary;
 };

@@ -59,6 +59,12 @@ class DreamcastCamera : public DreamcastPeripheral
         virtual void txComplete(std::shared_ptr<const MaplePacket> packet,
                                 std::shared_ptr<const Transmission> tx) final;
 
+        //! Inherited from DreamcastPeripheral
+        inline uint32_t getFunctionCode() override final
+        {
+            return FUNCTION_CODE;
+        }
+
     public:
         //! Function code for camera
         static const uint32_t FUNCTION_CODE = DEVICE_FN_CAMERA;

@@ -33,13 +33,17 @@ class ScreenData
     public:
         //! Constructor
         //! @param[in] mutex  Reference to the mutex to use (critical section mutex recommended)
-        ScreenData(MutexInterface& mutex);
+        ScreenData(MutexInterface& mutex, uint32_t defaultScreenNum=0);
 
         //! Set the screen bits
         //! @param[in] data  Screen words to set
         //! @param[in] startIndex  Starting screen word index (left to right, top to bottom)
         //! @param[in] numWords  Number of words to write
-        void setData(uint32_t* data, uint32_t startIndex=0, uint32_t numWords=NUM_SCREEN_WORDS);
+        void setData(const uint32_t* data, uint32_t startIndex=0, uint32_t numWords=NUM_SCREEN_WORDS);
+
+        //! Sets the current screen to one of the 4 defaults
+        //! @param[in] defaultScreenNum  The default screen number to set the screen to
+        void setDataToADefault(uint32_t defaultScreenNum);
 
         //! Resets the screen to its initialized default
         void resetToDefault();
@@ -54,12 +58,16 @@ class ScreenData
     public:
         //! Number of words in a screen
         static const uint32_t NUM_SCREEN_WORDS = 48;
+        //! Number of default screens
+        static const uint32_t NUM_DEFAULT_SCREENS = 4;
 
     private:
         //! The default screen data on initialization and resetToDefault()
-        static const uint32_t DEFAULT_SCREEN_DATA[NUM_SCREEN_WORDS];
+        static const uint32_t DEFAULT_SCREENS[NUM_DEFAULT_SCREENS][NUM_SCREEN_WORDS];
         //! Mutex used to ensure integrity of data between multiple cores
         MutexInterface& mMutex;
+        //! Default screen to revert to on resetToDefault()
+        uint32_t mDefaultScreen[NUM_SCREEN_WORDS];
         //! The current screen data
         uint32_t mScreenData[NUM_SCREEN_WORDS];
         //! Flag set to true in setData and set to false in readData

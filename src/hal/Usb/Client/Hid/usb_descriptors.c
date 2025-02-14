@@ -49,13 +49,14 @@ uint8_t get_usb_descriptor_number_of_gamepads()
 
 #undef TUD_HID_REPORT_DESC_GAMEPAD
 
+#define GET_NUM_BUTTONS(numPlayers, playerIdx) ((numPlayers == 1) ? 32 : (31 - playerIdx))
+
 // Tweak the gamepad descriptor so that the minimum value on analog controls is -128 instead of -127
-#define TUD_HID_REPORT_DESC_GAMEPAD(...) \
+#define TUD_HID_REPORT_DESC_GAMEPAD(numPlayers, playerIdx) \
   HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP     )                 ,\
   HID_USAGE      ( HID_USAGE_DESKTOP_GAMEPAD  )                 ,\
   HID_COLLECTION ( HID_COLLECTION_APPLICATION )                 ,\
-    /* Report ID if any */\
-    __VA_ARGS__ \
+    HID_REPORT_ID( GAMEPAD_MAIN_REPORT_ID )                     \
     /* 8 bit X, Y */ \
     HID_USAGE_PAGE     ( HID_USAGE_PAGE_DESKTOP                 ) ,\
     HID_USAGE          ( HID_USAGE_DESKTOP_X                    ) ,\
@@ -93,13 +94,23 @@ uint8_t get_usb_descriptor_number_of_gamepads()
     HID_REPORT_COUNT   ( 1                                      ) ,\
     HID_REPORT_SIZE    ( 8                                      ) ,\
     HID_INPUT          ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
-    /* 32 bit Button Map */ \
+    /* Up to 32 bit Button Map (less than 32 to index players on some systems) */ \
     HID_USAGE_PAGE     ( HID_USAGE_PAGE_BUTTON                  ) ,\
     HID_USAGE_MIN      ( 1                                      ) ,\
-    HID_USAGE_MAX      ( 32                                     ) ,\
+    HID_USAGE_MAX      ( GET_NUM_BUTTONS(numPlayers, playerIdx) ) ,\
     HID_LOGICAL_MIN    ( 0                                      ) ,\
     HID_LOGICAL_MAX    ( 1                                      ) ,\
-    HID_REPORT_COUNT   ( 32                                     ) ,\
+    HID_REPORT_COUNT   ( GET_NUM_BUTTONS(numPlayers, playerIdx) ) ,\
+    HID_REPORT_SIZE    ( 1                                      ) ,\
+    HID_INPUT          ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
+    /* To pad things out to exactly 12 bytes */ \
+    HID_USAGE_PAGE_N   ( HID_USAGE_PAGE_VENDOR, 2               ) ,\
+    HID_USAGE          ( 0x01                                   ) ,\
+    HID_USAGE_MIN      ( 1                                      ) ,\
+    HID_USAGE_MAX      ( 8 + (32 - GET_NUM_BUTTONS(numPlayers, playerIdx))) ,\
+    HID_LOGICAL_MIN    ( 0                                      ) ,\
+    HID_LOGICAL_MAX    ( 1                                      ) ,\
+    HID_REPORT_COUNT   ( 8 + (32 - GET_NUM_BUTTONS(numPlayers, playerIdx))) ,\
     HID_REPORT_SIZE    ( 1                                      ) ,\
     HID_INPUT          ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
   HID_COLLECTION_END \
@@ -123,7 +134,7 @@ tusb_desc_device_t const desc_device =
     .idVendor           = 0x1209,
     .idProduct          = 0x2F07,
 
-    .bcdDevice          = 0x0101,
+    .bcdDevice          = 0x0102,
 
     .iManufacturer      = 0x01,
     .iProduct           = 0x02,
@@ -142,9 +153,9 @@ uint8_t const *tud_descriptor_device_cb(void) {
 // HID Report Descriptor
 //--------------------------------------------------------------------+
 
-uint8_t const desc_hid_report[] =
+uint8_t desc_hid_report[] =
 {
-    TUD_HID_REPORT_DESC_GAMEPAD()
+    TUD_HID_REPORT_DESC_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 0)
 };
 
 // Invoked when received GET HID REPORT DESCRIPTOR
@@ -152,12 +163,11 @@ uint8_t const desc_hid_report[] =
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
 {
-    for (uint8_t i = 0; i < numberOfGamepads; ++i)
+    if (instance < numberOfGamepads)
     {
-        if (instance == ITF_NUM_GAMEPAD(numberOfGamepads, i))
-        {
-            return desc_hid_report;
-        }
+        uint8_t buff[] = {TUD_HID_REPORT_DESC_GAMEPAD(numberOfGamepads, instance)};
+        memcpy(desc_hid_report, buff, sizeof(desc_hid_report));
+        return desc_hid_report;
     }
 
     return NULL;
@@ -200,8 +210,6 @@ uint8_t player_to_epin(uint8_t player)
     }
 }
 
-#define GAMEPAD_REPORT_SIZE (1 + sizeof(hid_gamepad_report_t))
-
 #define CONFIG_HEADER(numGamepads) \
     TUD_CONFIG_DESCRIPTOR(1, ITF_COUNT(numGamepads), 0, GET_CONFIG_LEN(numGamepads), TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 400)
 
@@ -223,10 +231,10 @@ uint8_t desc_configuration[] =
     // * Gamepad Descriptors                                                   *
     // *************************************************************************
 
-    GAMEPAD_CONFIG_DESC(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 3), PLAYER_TO_STR_IDX(3), EPIN_GAMEPAD4),
-    GAMEPAD_CONFIG_DESC(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 2), PLAYER_TO_STR_IDX(2), EPIN_GAMEPAD3),
-    GAMEPAD_CONFIG_DESC(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 1), PLAYER_TO_STR_IDX(1), EPIN_GAMEPAD2),
-    GAMEPAD_CONFIG_DESC(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 0), PLAYER_TO_STR_IDX(0), EPIN_GAMEPAD1),
+    GAMEPAD_CONFIG_DESC(0, PLAYER_TO_STR_IDX(0), EPIN_GAMEPAD1),
+    GAMEPAD_CONFIG_DESC(1, PLAYER_TO_STR_IDX(1), EPIN_GAMEPAD2),
+    GAMEPAD_CONFIG_DESC(2, PLAYER_TO_STR_IDX(2), EPIN_GAMEPAD3),
+    GAMEPAD_CONFIG_DESC(3, PLAYER_TO_STR_IDX(3), EPIN_GAMEPAD4),
 
     // *************************************************************************
     // * Storage Device Descriptor                                             *
@@ -260,9 +268,8 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 
     for (uint8_t i = 0; i < numberOfGamepads; ++i)
     {
-        uint8_t idx = numberOfGamepads - i - 1;
         uint8_t gpConfig[] = {
-            GAMEPAD_CONFIG_DESC(ITF_NUM_GAMEPAD(numberOfGamepads, idx), PLAYER_TO_STR_IDX(idx), player_to_epin(idx))
+            GAMEPAD_CONFIG_DESC(i, PLAYER_TO_STR_IDX(i), player_to_epin(i))
         };
         memcpy(&desc_configuration[offset], gpConfig, sizeof(gpConfig));
         offset += sizeof(gpConfig);
@@ -296,10 +303,10 @@ char const *string_desc_arr[] =
     "OrangeFox86",               // 1: Manufacturer
     "DreamPort",                 // 2: Product
     NULL,                        // 3: Serial (special case; get pico serial)
-    "P1",                        // 4: Gamepad 1
-    "P2",                        // 5: Gamepad 2
-    "P3",                        // 6: Gamepad 3
-    "P4",                        // 7: Gamepad 4
+    "DreamPort A",               // 4: Gamepad 1
+    "DreamPort B",               // 5: Gamepad 2
+    "DreamPort C",               // 6: Gamepad 3
+    "DreamPort D",               // 7: Gamepad 4
     "MSC",                       // 8: Mass Storage Class
     "CDC",                       // 9: Communication Device Class
 };
@@ -327,7 +334,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         if (index == PLAYER_TO_STR_IDX(0) && numberOfGamepads == 1)
         {
             // Special case - if there is only 1 controller, change the label
-            str = "Dreamcast Controller";
+            str = "DreamPort";
         }
         else if (str == NULL)
         {

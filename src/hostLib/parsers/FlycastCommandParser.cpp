@@ -7,6 +7,9 @@
 #include <string>
 #include <cstdlib>
 
+// Format: X[modifier-char]<cmd-data>\n
+// This parser must always return a single line of data
+
 // Simple definition of a transmitter which just echos status and received data
 class FlycastEchoTransmitter : public Transmitter
 {
@@ -42,15 +45,19 @@ public:
 } flycastEchoTransmitter;
 
 FlycastCommandParser::FlycastCommandParser(
+    SystemIdentification& identification,
     std::shared_ptr<PrioritizedTxScheduler>* schedulers,
     const uint8_t* senderAddresses,
     uint32_t numSenders,
-    const std::vector<std::shared_ptr<PlayerData>>& playerData
+    const std::vector<std::shared_ptr<PlayerData>>& playerData,
+    const std::vector<std::shared_ptr<DreamcastMainNode>>& nodes
 ) :
+    mIdentification(identification),
     mSchedulers(schedulers),
     mSenderAddresses(senderAddresses),
     mNumSenders(numSenders),
-    mPlayerData(playerData)
+    mPlayerData(playerData),
+    nodes(nodes)
 {}
 
 const char* FlycastCommandParser::getCommandChars()
@@ -98,13 +105,8 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 {
                     std::string number;
                     number.assign(iter, eol - iter);
-                    try
+                    if (0 == sscanf(iter, "%i", &idx))
                     {
-                        idx = std::stoi(number);
-                    }
-                    catch(...)
-                    {
-                        // Default to all
                         idx = -1;
                     }
                 }
@@ -113,17 +115,111 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 if (idx < 0)
                 {
                     // all
+                    int count = 0;
                     for (std::shared_ptr<PlayerData>& playerData : mPlayerData)
                     {
+                        ++count;
                         playerData->screenData.resetToDefault();
                     }
+                    printf("%i\n", count);
                 }
                 else if (static_cast<std::size_t>(idx) < mPlayerData.size())
                 {
                     mPlayerData[idx]->screenData.resetToDefault();
+                    printf("1\n");
+                }
+                else
+                {
+                    printf("0\n");
+
                 }
             }
             return;
+
+            // XP [0-4] [0-4]
+            case 'P' :
+            {
+                // Remove P
+                ++iter;
+                int idxin = -1;
+                int idxout = -1;
+                if (2 == sscanf(iter, "%i %i", &idxin, &idxout) &&
+                    idxin >= 0 &&
+                    static_cast<std::size_t>(idxin) < mPlayerData.size() &&
+                    idxout >= 0 &&
+                    static_cast<std::size_t>(idxout) < ScreenData::NUM_DEFAULT_SCREENS)
+                {
+                    mPlayerData[idxin]->screenData.setDataToADefault(idxout);
+                    printf("1\n");
+                }
+                else
+                {
+                    printf("0\n");
+                }
+            }
+            return;
+
+            // XS to return serial
+            case 'S' :
+            {
+                char buffer[mIdentification.getSerialSize() + 1] = {0};
+                mIdentification.getSerial(buffer, sizeof(buffer) - 1);
+                buffer[sizeof(buffer) - 1] = '\0';
+                printf("%s\n", buffer);
+            }
+            return;
+
+            // X?0, X?1, X?2, or X?3 will print summary for the given node index
+            case '?' :
+            {
+                // Remove question mark
+                ++iter;
+                int idx = -1;
+                if (iter < eol)
+                {
+                    std::string number;
+                    number.assign(iter, eol - iter);
+                    if (0 == sscanf(iter, "%i", &idx))
+                    {
+                        idx = -1;
+                    }
+                }
+
+                if (idx >= 0 && static_cast<std::size_t>(idx) < nodes.size())
+                {
+                    nodes[idx]->printSummary();
+                }
+                else
+                {
+                    printf("NULL\n");
+                }
+            }
+            return;
+
+            // Reserved
+            case ' ': // Fall through
+            case '0': // Fall through
+            case '1': // Fall through
+            case '2': // Fall through
+            case '3': // Fall through
+            case '4': // Fall through
+            case '5': // Fall through
+            case '6': // Fall through
+            case '7': // Fall through
+            case '8': // Fall through
+            case '9': // Fall through
+            case 'a': // Fall through
+            case 'b': // Fall through
+            case 'c': // Fall through
+            case 'd': // Fall through
+            case 'e': // Fall through
+            case 'f': // Fall through
+            case 'A': // Fall through
+            case 'B': // Fall through
+            case 'C': // Fall through
+            case 'D': // Fall through
+            case 'E': // Fall through
+            case 'F': // Fall through
 
             // No special case
             default: break;

@@ -41,7 +41,9 @@ using ::testing::DoAll;
 class PrioritizedTxSchedulerUnitTest : public PrioritizedTxScheduler
 {
     public:
-        PrioritizedTxSchedulerUnitTest(): PrioritizedTxScheduler(0x00, 255) {}
+        MockMutex mMutex;
+
+        PrioritizedTxSchedulerUnitTest(): PrioritizedTxScheduler(mMutex, 0x00, 255) {}
 
         std::vector<std::list<std::shared_ptr<Transmission>>>& getSchedule()
         {

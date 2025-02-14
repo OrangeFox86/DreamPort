@@ -79,6 +79,12 @@ class DreamcastVibration : public DreamcastPeripheral
         //! Immediately stops current vibration
         void stop();
 
+        //! Inherited from DreamcastPeripheral
+        inline uint32_t getFunctionCode() override final
+        {
+            return FUNCTION_CODE;
+        }
+
     private:
         //! Computes the number of power increments that will be executed
         //! @param[in] power  Starting power intensity [1,7]

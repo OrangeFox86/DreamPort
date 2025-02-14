@@ -41,7 +41,8 @@ DreamcastMainNode::DreamcastMainNode(MapleBusInterface& bus,
     mSubNodes(),
     mTransmissionTimeliner(bus, prioritizedTxScheduler),
     mScheduleId(-1),
-    mCommFailCount(0)
+    mCommFailCount(0),
+    mPrintSummary(false)
 {
     addInfoRequestToSchedule();
     mSubNodes.reserve(DreamcastPeripheral::MAX_SUB_PERIPHERALS);
@@ -110,6 +111,11 @@ void DreamcastMainNode::disconnectMainPeripheral(uint64_t currentTimeUs)
     DEBUG_PRINT("P%lu disconnected\n", mPlayerData.playerIndex + 1);
 }
 
+void DreamcastMainNode::printSummary()
+{
+    mPrintSummary = true;
+}
+
 void DreamcastMainNode::readTask(uint64_t currentTimeUs)
 {
     TransmissionTimeliner::ReadStatus readStatus = mTransmissionTimeliner.readTask(currentTimeUs);
@@ -166,6 +172,15 @@ void DreamcastMainNode::readTask(uint64_t currentTimeUs)
     else if (readStatus.busPhase == MapleBusInterface::Phase::READ_FAILED
              || readStatus.busPhase == MapleBusInterface::Phase::WRITE_FAILED)
     {
+        // Send this off to the one who transmitted this
+        Transmitter* transmitter = readStatus.transmission->transmitter;
+        if (transmitter != nullptr)
+        {
+            transmitter->txFailed(readStatus.busPhase == MapleBusInterface::Phase::WRITE_FAILED,
+                                    readStatus.busPhase == MapleBusInterface::Phase::READ_FAILED,
+                                    readStatus.transmission);
+        }
+
         uint8_t recipientAddr = readStatus.transmission->packet->frame.recipientAddr;
         if ((recipientAddr & mAddr) && ++mCommFailCount >= MAX_FAILURE_DISCONNECT_COUNT)
         {
@@ -178,17 +193,6 @@ void DreamcastMainNode::readTask(uint64_t currentTimeUs)
                 disconnectMainPeripheral(currentTimeUs);
             }
             mCommFailCount = 0;
-        }
-        else
-        {
-            // Send this off to the one who transmitted this
-            Transmitter* transmitter = readStatus.transmission->transmitter;
-            if (transmitter != nullptr)
-            {
-                transmitter->txFailed(readStatus.busPhase == MapleBusInterface::Phase::WRITE_FAILED,
-                                      readStatus.busPhase == MapleBusInterface::Phase::READ_FAILED,
-                                      readStatus.transmission);
-            }
         }
     }
 }
@@ -220,6 +224,23 @@ void DreamcastMainNode::runDependentTasks(uint64_t currentTimeUs)
                 true,
                 EXPECTED_DEVICE_INFO_PAYLOAD_WORDS);
         }
+    }
+
+    // Summary is printed here for safety
+    if (mPrintSummary)
+    {
+        mPrintSummary = false;
+
+        printPeripherals();
+
+        for (std::vector<std::shared_ptr<DreamcastSubNode>>::iterator iter = mSubNodes.begin();
+            iter != mSubNodes.end();
+            ++iter)
+        {
+            printf(",");
+            (*iter)->printPeripherals();
+        }
+        printf("\n");
     }
 }
 

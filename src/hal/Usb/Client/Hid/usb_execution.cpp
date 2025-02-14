@@ -40,10 +40,10 @@
 #include "cdc.hpp"
 
 UsbGamepad usbGamepads[MAX_NUMBER_OF_USB_GAMEPADS] = {
-  UsbGamepad(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 0)),
-  UsbGamepad(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 1)),
-  UsbGamepad(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 2)),
-  UsbGamepad(ITF_NUM_GAMEPAD(MAX_NUMBER_OF_USB_GAMEPADS, 3))
+  UsbGamepad(0),
+  UsbGamepad(1),
+  UsbGamepad(2),
+  UsbGamepad(3)
 };
 
 UsbGamepadDreamcastControllerObserver usbGamepadDreamcastControllerObservers[MAX_NUMBER_OF_USB_GAMEPADS] = {
@@ -164,11 +164,6 @@ void usb_init(
 {
   uint32_t numDevices = get_num_usb_controllers();
 
-  for (uint32_t i = 0; i < numDevices; ++i)
-  {
-    usbGamepads[i].setInterfaceId(ITF_NUM_GAMEPAD(numDevices, i));
-  }
-
   uint32_t max = sizeof(devices) / sizeof(devices[1]);
   if (numDevices > max)
   {
@@ -282,9 +277,8 @@ void tud_hid_set_report_cb(uint8_t instance,
                            uint8_t const *buffer,
                            uint16_t bufsize)
 {
-  (void) instance;
   (void) report_type;
 
   // echo back anything we received from host
-  tud_hid_report(report_id, buffer, bufsize);
+  tud_hid_n_report(instance, report_id, buffer, bufsize);
 }

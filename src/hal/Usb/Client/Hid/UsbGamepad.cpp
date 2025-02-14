@@ -33,9 +33,8 @@
 
 #include "utils.h"
 
-UsbGamepad::UsbGamepad(uint8_t interfaceId, uint8_t reportId) :
-  interfaceId(interfaceId),
-  reportId(reportId),
+UsbGamepad::UsbGamepad(uint8_t playerIdx) :
+  playerIdx(playerIdx),
   currentDpad(),
   currentButtons(0),
   buttonsUpdated(true)
@@ -245,7 +244,7 @@ bool UsbGamepad::send(bool force)
 {
   if (buttonsUpdated || force)
   {
-    bool sent = sendReport(interfaceId, reportId);
+    bool sent = sendReport(ITF_NUM_GAMEPAD(playerIdx), GAMEPAD_MAIN_REPORT_ID);
     if (sent)
     {
       buttonsUpdated = false;
@@ -258,15 +257,28 @@ bool UsbGamepad::send(bool force)
   }
 }
 
+typedef struct TU_ATTR_PACKED
+{
+  int8_t  x;         ///< Delta x  movement of left analog-stick
+  int8_t  y;         ///< Delta y  movement of left analog-stick
+  int8_t  z;         ///< Delta z  movement of right analog-joystick
+  int8_t  rz;        ///< Delta Rz movement of right analog-joystick
+  int8_t  rx;        ///< Delta Rx movement of analog left trigger
+  int8_t  ry;        ///< Delta Ry movement of analog right trigger
+  uint8_t hat;       ///< Buttons mask for currently pressed buttons in the DPad/hat
+  uint32_t buttons;  ///< Buttons mask for currently pressed buttons
+  uint8_t pad;       ///< Vendor data (padding)
+}hid_dc_gamepad_report_t;
+
 uint8_t UsbGamepad::getReportSize()
 {
-  return sizeof(hid_gamepad_report_t);
+  return sizeof(hid_dc_gamepad_report_t);
 }
 
 uint16_t UsbGamepad::getReport(uint8_t *buffer, uint16_t reqlen)
 {
   // Build the report
-  hid_gamepad_report_t report;
+  hid_dc_gamepad_report_t report;
   report.x = currentLeftAnalog[0];
   report.y = currentLeftAnalog[1];
   report.z = currentLeftAnalog[2];
@@ -275,6 +287,7 @@ uint16_t UsbGamepad::getReport(uint8_t *buffer, uint16_t reqlen)
   report.ry = currentRightAnalog[1];
   report.hat = getHatValue();
   report.buttons = currentButtons;
+  report.pad = playerIdx; // Just put player index in this padding
   // Copy report into buffer
   uint16_t setLen = (sizeof(report) <= reqlen) ? sizeof(report) : reqlen;
   memcpy(buffer, &report, setLen);

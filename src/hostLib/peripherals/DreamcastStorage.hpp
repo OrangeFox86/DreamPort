@@ -128,6 +128,12 @@ class DreamcastStorage : public DreamcastPeripheral, UsbFile
         //! @returns true iff CRC calculation is required for reads and writes
         bool isCrcRequired() { return ((mFd >> 6) & 0x01) != 0; }
 
+        //! Inherited from DreamcastPeripheral
+        inline uint32_t getFunctionCode() override final
+        {
+            return FUNCTION_CODE;
+        }
+
     private:
         //! Flips the endianness of a word
         //! @param[in] word  Input word

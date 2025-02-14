@@ -68,6 +68,26 @@ class DreamcastNode : public Transmitter
             return DreamcastPeripheral::getRecipientAddress(mPlayerData.playerIndex, mAddr);
         }
 
+        //! Prints summary of connected devices
+        void printPeripherals()
+        {
+            printf("{");
+            bool first = true;
+            for (const std::shared_ptr<DreamcastPeripheral>& periph : mPeripherals)
+            {
+                if (!first)
+                {
+                    printf(",");
+                }
+                first = false;
+                printf(
+                    "%08lX %08lX",
+                    (long unsigned int)periph->getFunctionCode(),
+                    (long unsigned int)periph->getFunctionDefinition());
+            }
+            printf("}");
+        }
+
     protected:
         //! Main constructor with scheduler
         DreamcastNode(uint8_t addr,

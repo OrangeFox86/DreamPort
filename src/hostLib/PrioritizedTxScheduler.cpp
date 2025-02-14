@@ -24,13 +24,15 @@
 #include "PrioritizedTxScheduler.hpp"
 #include "configuration.h"
 #include "utils.h"
+#include <hal/System/LockGuard.hpp>
 
 #include <assert.h>
 
 // STL
 #include <algorithm>
 
-PrioritizedTxScheduler::PrioritizedTxScheduler(uint8_t senderAddress, uint32_t max) :
+PrioritizedTxScheduler::PrioritizedTxScheduler(MutexInterface& m, uint8_t senderAddress, uint32_t max) :
+    mScheduleMutex(m),
     mSenderAddress(senderAddress),
     mNextId(1),
     mSchedule()
@@ -43,6 +45,9 @@ PrioritizedTxScheduler::~PrioritizedTxScheduler() {}
 uint32_t PrioritizedTxScheduler::add(std::shared_ptr<Transmission> tx)
 {
     assert(tx->priority < mSchedule.size());
+
+    LockGuard lock(mScheduleMutex);
+
     std::list<std::shared_ptr<Transmission>>& schedule = mSchedule[tx->priority];
     // Keep iterating until correct position is found
     std::list<std::shared_ptr<Transmission>>::const_iterator iter = schedule.cbegin();
@@ -51,6 +56,7 @@ uint32_t PrioritizedTxScheduler::add(std::shared_ptr<Transmission> tx)
         ++iter;
     }
     schedule.insert(iter, tx);
+
     return tx->transmissionId;
 }
 
@@ -191,6 +197,8 @@ std::shared_ptr<Transmission> PrioritizedTxScheduler::popItem(ScheduleItem& sche
 
     if (scheduleItem.mIsValid)
     {
+        LockGuard lock(mScheduleMutex);
+
         // Save the transmission
         item = scheduleItem.getTx();
 
@@ -215,6 +223,7 @@ std::shared_ptr<Transmission> PrioritizedTxScheduler::popItem(ScheduleItem& sche
 
 uint32_t PrioritizedTxScheduler::cancelById(uint32_t transmissionId)
 {
+    LockGuard lock(mScheduleMutex);
     uint32_t n = 0;
     for (std::vector<std::list<std::shared_ptr<Transmission>>>::iterator scheduleIter = mSchedule.begin();
          scheduleIter != mSchedule.end();
@@ -240,6 +249,7 @@ uint32_t PrioritizedTxScheduler::cancelById(uint32_t transmissionId)
 
 uint32_t PrioritizedTxScheduler::cancelByRecipient(uint8_t recipientAddr)
 {
+    LockGuard lock(mScheduleMutex);
     uint32_t n = 0;
     for (std::vector<std::list<std::shared_ptr<Transmission>>>::iterator scheduleIter = mSchedule.begin();
          scheduleIter != mSchedule.end();
@@ -264,6 +274,7 @@ uint32_t PrioritizedTxScheduler::cancelByRecipient(uint8_t recipientAddr)
 
 uint32_t PrioritizedTxScheduler::countRecipients(uint8_t recipientAddr)
 {
+    LockGuard lock(mScheduleMutex);
     uint32_t n = 0;
     for (std::vector<std::list<std::shared_ptr<Transmission>>>::iterator scheduleIter = mSchedule.begin();
          scheduleIter != mSchedule.end();
@@ -284,11 +295,13 @@ uint32_t PrioritizedTxScheduler::countRecipients(uint8_t recipientAddr)
 
 uint32_t PrioritizedTxScheduler::cancelAll()
 {
+    LockGuard lock(mScheduleMutex);
     uint32_t n = 0;
     for (std::vector<std::list<std::shared_ptr<Transmission>>>::iterator scheduleIter = mSchedule.begin();
          scheduleIter != mSchedule.end();
          ++scheduleIter)
     {
+
         n += scheduleIter->size();
         scheduleIter->clear();
     }

@@ -139,13 +139,14 @@ class MainNodeTest : public ::testing::Test
             mScreenData(mMutex),
             mPlayerData{0, mDreamcastControllerObserver, mScreenData, mClock, mUsbFileSystem},
             mMapleBus(),
-            mPrioritizedTxScheduler(std::make_shared<PrioritizedTxScheduler>(0x00)),
+            mPrioritizedTxScheduler(std::make_shared<PrioritizedTxScheduler>(mMutex2, 0x00)),
             mDreamcastMainNode(mMapleBus, mPlayerData, mPrioritizedTxScheduler)
         {}
 
     protected:
         MockDreamcastControllerObserver mDreamcastControllerObserver;
         MockMutex mMutex;
+        MockMutex mMutex2;
         MockClock mClock;
         MockUsbFileSystem mUsbFileSystem;
         ScreenData mScreenData;

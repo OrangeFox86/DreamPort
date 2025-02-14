@@ -27,8 +27,11 @@
 #include "configuration.h"
 #include <stdint.h>
 
-// Going in reverse order because the host seems to usually enumerate the highest value first
-#define ITF_NUM_GAMEPAD(numGamepads, idx) (numGamepads - idx - 1)
+#define GAMEPAD_MAIN_REPORT_ID 1
+#define REPORT_ID_DC_RAW_DATA 2
+#define GAMEPAD_REPORT_SIZE 64
+
+#define ITF_NUM_GAMEPAD(idx) (idx)
 
 #define MAX_NUMBER_OF_USB_GAMEPADS (4)
 

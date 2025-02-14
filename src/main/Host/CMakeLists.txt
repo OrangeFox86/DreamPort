@@ -27,7 +27,29 @@ target_include_directories(host-4p
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/host-4p>"
     "${PROJECT_SOURCE_DIR}/inc")
 
+add_executable(host-2p ${HOST_SRC})
+pico_add_extra_outputs(host-2p)
+target_link_libraries(host-2p
+  PRIVATE
+    pico_multicore
+    hal-MapleBus
+    hal-System
+    hal-Usb-Client-Hid
+    pico_stdio_usb
+    hostLib
+)
+target_compile_options(host-2p PRIVATE
+  -Wall
+  -Werror
+  -O3
+)
+target_compile_definitions(host-2p PUBLIC SELECTED_NUMBER_OF_DEVICES=2)
 
+target_include_directories(host-2p
+  PRIVATE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/host-4p>"
+    "${PROJECT_SOURCE_DIR}/inc")
 
 add_executable(host-1p ${HOST_SRC})
 pico_add_extra_outputs(host-1p)

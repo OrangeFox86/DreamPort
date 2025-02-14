@@ -54,4 +54,6 @@ class MockDreamcastPeripheral : public DreamcastPeripheral
                     (override));
 
         MOCK_METHOD(void, task, (uint64_t currentTimeUs), (override));
+
+        MOCK_METHOD(uint32_t, getFunctionCode, (), (override));
 };

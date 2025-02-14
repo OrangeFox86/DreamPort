@@ -79,8 +79,7 @@ class UsbGamepad : public UsbControllerDevice
 
   public:
     //! UsbKeyboard constructor
-    //! @param[in] reportId  The report ID to use for this USB keyboard
-    UsbGamepad(uint8_t interfaceId, uint8_t reportId = 0);
+    UsbGamepad(uint8_t playerIdx);
     //! @returns true iff any button is currently "pressed"
     bool isButtonPressed() final;
     //! Sets the analog stick for the X direction
@@ -130,11 +129,6 @@ class UsbGamepad : public UsbControllerDevice
     //! @param[in] reqlen  The length of buffer
     uint16_t getReport(uint8_t *buffer, uint16_t reqlen) final;
 
-    inline void setInterfaceId(uint8_t id)
-    {
-      interfaceId = id;
-    }
-
   protected:
     //! @returns the hat value based on current dpad state
     uint8_t getHatValue();
@@ -157,9 +151,7 @@ class UsbGamepad : public UsbControllerDevice
     static const int8_t ANALOG_PRESSED_TOL = 5;
 
   private:
-    uint8_t interfaceId;
-    //! The report ID to use when sending keys to host
-    const uint8_t reportId;
+    const uint8_t playerIdx;
     //! Current left analog states (x,y,z)
     int8_t currentLeftAnalog[3];
     //! Current right analog states (x,y,z)

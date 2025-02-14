@@ -92,8 +92,11 @@ class DreamcastPeripheral : public Transmitter
         //! @param[in] currentTimeUs  The current time in microseconds
         virtual void task(uint64_t currentTimeUs) = 0;
 
-        //! @returns peripheral name
+        //! @returns unique peripheral name
         inline const char* const getName() { return mName; }
+
+        //! @returns the static unique function code of this peripheral
+        virtual uint32_t getFunctionCode() = 0;
 
         //! @returns the function definition of this peripheral
         inline const uint32_t& getFunctionDefinition() { return mFd; }

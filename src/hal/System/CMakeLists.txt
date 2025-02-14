@@ -10,6 +10,7 @@ target_link_libraries(hal-System
     pico_stdlib
     hardware_flash
     hardware_pwm
+    pico_unique_id
 )
 target_compile_options(hal-System PRIVATE
   -Wall

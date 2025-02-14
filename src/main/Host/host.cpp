@@ -37,6 +37,7 @@
 #include "CriticalSectionMutex.hpp"
 #include "Mutex.hpp"
 #include "Clock.hpp"
+#include "PicoIdentification.cpp"
 
 #include "hal/System/LockGuard.hpp"
 #include "hal/MapleBus/MapleBusInterface.hpp"
@@ -75,19 +76,21 @@ void core1()
     playerData.resize(numDevices);
     DreamcastControllerObserver** observers = get_usb_controller_observers();
     std::shared_ptr<MapleBusInterface> buses[numDevices];
-    std::shared_ptr<DreamcastMainNode> dreamcastMainNodes[numDevices];
+    std::vector<std::shared_ptr<DreamcastMainNode>> dreamcastMainNodes;
+    dreamcastMainNodes.resize(numDevices);
+    Mutex schedulerMutexes[numDevices];
     std::shared_ptr<PrioritizedTxScheduler> schedulers[numDevices];
     Clock clock;
     for (uint32_t i = 0; i < numDevices; ++i)
     {
-        screenData[i] = std::make_shared<ScreenData>(screenMutexes[i]);
+        screenData[i] = std::make_shared<ScreenData>(screenMutexes[i], i);
         playerData[i] = std::make_shared<PlayerData>(i,
                                                      *(observers[i]),
                                                      *screenData[i],
                                                      clock,
                                                      usb_msc_get_file_system());
         buses[i] = create_maple_bus(maplePins[i], mapleDirPins[i], DIR_OUT_HIGH);
-        schedulers[i] = std::make_shared<PrioritizedTxScheduler>(MAPLE_HOST_ADDRESSES[i]);
+        schedulers[i] = std::make_shared<PrioritizedTxScheduler>(schedulerMutexes[i], MAPLE_HOST_ADDRESSES[i]);
         dreamcastMainNodes[i] = std::make_shared<DreamcastMainNode>(
             *buses[i],
             *playerData[i],
@@ -100,17 +103,18 @@ void core1()
     ttyParser->addCommandParser(
         std::make_shared<MaplePassthroughCommandParser>(
             &schedulers[0], MAPLE_HOST_ADDRESSES, numDevices));
+    PicoIdentification picoIdentification;
     ttyParser->addCommandParser(
         std::make_shared<FlycastCommandParser>(
-            &schedulers[0], MAPLE_HOST_ADDRESSES, numDevices, playerData));
+            picoIdentification, &schedulers[0], MAPLE_HOST_ADDRESSES, numDevices, playerData, dreamcastMainNodes));
 
     while(true)
     {
         // Process each main node
-        for (uint32_t i = 0; i < numDevices; ++i)
+        for (auto& node : dreamcastMainNodes)
         {
             // Worst execution duration of below is ~350 us at 133 MHz when debug print is disabled
-            dreamcastMainNodes[i]->task(time_us_64());
+            node->task(time_us_64());
         }
         // Process any waiting commands in the TTY parser
         ttyParser->process();

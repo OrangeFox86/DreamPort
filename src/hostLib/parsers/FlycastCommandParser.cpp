@@ -34,12 +34,18 @@ public:
     virtual void txComplete(std::shared_ptr<const MaplePacket> packet,
                             std::shared_ptr<const Transmission> tx) final
     {
-        char buffer[9];
-        snprintf(buffer, sizeof(buffer), "%08lX", (long unsigned int)packet->frame.toWord());
-        for (int i = 0; i < 8; i += 2)
+        printf(
+            "%02hhX %02hhX %02hhX %02hhX",
+            packet->frame.command,
+            packet->frame.recipientAddr,
+            packet->frame.senderAddr,
+            packet->frame.length);
+
+        for (uint32_t p : packet->payload)
         {
-            printf(" %c%c", buffer[i], buffer[i + 1]);
+            printf(" %08lX", p);
         }
+
         printf("\n");
     }
 } flycastEchoTransmitter;

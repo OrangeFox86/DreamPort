@@ -9,11 +9,18 @@
 
 // TODO: this is not the best way to forward declare here
 extern "C" {
+    // Using this is a little dicey because buffer overflow will cause lost bytes
+    // buffer is set to 2100 which should handle any command or response
     void direct_write_cdc(const char *buf, int length);
 }
 
 // Format: X[modifier-char]<cmd-data>\n
 // This parser must always return a single line of data
+
+static void send_response(const std::string& response)
+{
+    direct_write_cdc(response.c_str(), response.size());
+}
 
 // Simple definition of a transmitter which just echos status and received data
 class FlycastEchoTransmitter : public Transmitter
@@ -26,13 +33,14 @@ public:
                           bool readFailed,
                           std::shared_ptr<const Transmission> tx) final
     {
+        std::string err;
         if (writeFailed)
         {
-            printf("*failed write\n");
+            send_response("*failed write\n");
         }
         else
         {
-            printf("*failed read\n");
+            send_response("*failed read\n");
         }
     }
 
@@ -47,15 +55,15 @@ public:
             packet->frame.senderAddr,
             packet->frame.length);
 
-        direct_write_cdc(buf, strlen(buf));
+        send_response(buf);
 
         for (uint32_t p : packet->payload)
         {
             snprintf(buf, 64, " %08lX", p);
-            direct_write_cdc(buf, strlen(buf));
+            send_response(buf);
         }
 
-        direct_write_cdc("\n", 1);
+        send_response("\n");
     }
 } flycastEchoTransmitter;
 
@@ -136,16 +144,17 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                         ++count;
                         playerData->screenData.resetToDefault();
                     }
-                    printf("%i\n", count);
+                    std::string s = std::to_string(count);
+                    send_response(std::to_string(count));
                 }
                 else if (static_cast<std::size_t>(idx) < mPlayerData.size())
                 {
                     mPlayerData[idx]->screenData.resetToDefault();
-                    printf("1\n");
+                    send_response("1\n");
                 }
                 else
                 {
-                    printf("0\n");
+                    send_response("0\n");
 
                 }
             }
@@ -165,11 +174,11 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                     static_cast<std::size_t>(idxout) < ScreenData::NUM_DEFAULT_SCREENS)
                 {
                     mPlayerData[idxin]->screenData.setDataToADefault(idxout);
-                    printf("1\n");
+                    send_response("1\n");
                 }
                 else
                 {
-                    printf("0\n");
+                    send_response("0\n");
                 }
             }
             return;
@@ -180,7 +189,8 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 char buffer[mIdentification.getSerialSize() + 1] = {0};
                 mIdentification.getSerial(buffer, sizeof(buffer) - 1);
                 buffer[sizeof(buffer) - 1] = '\0';
-                printf("%s\n", buffer);
+                send_response(buffer);
+                send_response("\n");
             }
             return;
 
@@ -206,7 +216,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 }
                 else
                 {
-                    printf("NULL\n");
+                    send_response("NULL\n");
                 }
             }
             return;
@@ -320,21 +330,21 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
             }
             else
             {
-                printf("*failed invalid sender\n");
+                send_response("*failed invalid sender\n");
             }
         }
         else
         {
-            printf("*failed packet invalid\n");
+            send_response("*failed packet invalid\n");
         }
     }
     else
     {
-        printf("*failed missing data\n");
+        send_response("*failed missing data\n");
     }
 }
 
 void FlycastCommandParser::printHelp()
 {
-    printf("X: commands from a flycast emulator\n");
+    send_response("X: commands from a flycast emulator\n");
 }

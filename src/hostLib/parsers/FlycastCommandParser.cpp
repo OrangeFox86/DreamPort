@@ -7,6 +7,11 @@
 #include <string>
 #include <cstdlib>
 
+// TODO: this is not the best way to forward declare here
+extern "C" {
+    void direct_write_cdc(const char *buf, int length);
+}
+
 // Format: X[modifier-char]<cmd-data>\n
 // This parser must always return a single line of data
 
@@ -34,19 +39,23 @@ public:
     virtual void txComplete(std::shared_ptr<const MaplePacket> packet,
                             std::shared_ptr<const Transmission> tx) final
     {
-        printf(
+        char buf[64];
+        snprintf(buf, 64,
             "%02hhX %02hhX %02hhX %02hhX",
             packet->frame.command,
             packet->frame.recipientAddr,
             packet->frame.senderAddr,
             packet->frame.length);
 
+        direct_write_cdc(buf, strlen(buf));
+
         for (uint32_t p : packet->payload)
         {
-            printf(" %08lX", p);
+            snprintf(buf, 64, " %08lX", p);
+            direct_write_cdc(buf, strlen(buf));
         }
 
-        printf("\n");
+        direct_write_cdc("\n", 1);
     }
 } flycastEchoTransmitter;
 

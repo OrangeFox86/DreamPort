@@ -65,6 +65,13 @@ static MutexInterface* stdioMutex = nullptr;
 #include "pico/stdio/driver.h"
 extern "C" {
 
+void direct_write_cdc(const char *buf, int length)
+{
+    tud_cdc_write(buf, length);
+    tud_task();
+    tud_cdc_write_flush();
+}
+
 static void stdio_usb_out_chars2(const char *buf, int length)
 {
     if (length <= 0) return;

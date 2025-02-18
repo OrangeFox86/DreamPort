@@ -73,7 +73,7 @@ static uint8_t errorCount = 0;
 // README contents stored on ramdisk - must not be greater than 512 bytes
 #define README_CONTENTS "\
 MIT License\n\n\
-Copyright (c) 2022-2025 James Smith of OrangeFox86 https://github.com/OrangeFox86/DreamPort\n\n\
+Copyright (c) 2022-2025 James Smith of OrangeFox86 https://github.com/OrangeFox86/DreamPicoPort\n\n\
 This drive is where Dreamcast memory unit data may be viewed when one or more are\n\
 inserted into any controller. To write, copy file with the same name as the\n\
 target memory unit. Attempting to write more than 128 kb, read from/write\n\
@@ -183,28 +183,30 @@ Reading an entire VMU takes about 3 seconds and write takes 15 seconds."
 #define VOLUME_LABEL11_STR "DC-Memory  "
 #define VOLUME_ENTRY() SIMPLE_VOL_ENTRY(VOLUME_LABEL11_STR)
 
-enum
-{
-  ALLOCATED_DISK_BLOCK_NUM  = 13, // Number of actual blocks reserved in RAM disk
-  BAD_SECTOR_DISK_BLOCK_NUM = 252, // Used to line up memory files starting at address 0x0100
-  EXTERNAL_DISK_BLOCK_NUM = 2048, // Number of blocks that exist outside of RAM
-  FAKE_DISK_BLOCK_NUM = 32768,    // Report extra space in order to force FAT16 formatting
-  DISK_BLOCK_SIZE = 512           // Size in bytes of each block
-};
-#define REPORTED_BLOCK_NUM (ALLOCATED_DISK_BLOCK_NUM + BAD_SECTOR_DISK_BLOCK_NUM + EXTERNAL_DISK_BLOCK_NUM + FAKE_DISK_BLOCK_NUM)
+// Size in bytes of each block
+#define DISK_BLOCK_SIZE 512
 
 #define BYTES_PER_ROOT_ENTRY 32
 
 #define NUM_RESERVED_SECTORS 1
 #define NUM_FAT_COPIES 1
-#define SECTORS_PER_FAT 10
+#define SECTORS_PER_FAT 11
 #define NUM_ROOT_ENTRIES 16
 
 #define NUM_FAT_SECTORS (NUM_FAT_COPIES * SECTORS_PER_FAT)
 #define NUM_ROOT_SECTORS ((NUM_ROOT_ENTRIES * BYTES_PER_ROOT_ENTRY) / DISK_BLOCK_SIZE)
 #define NUM_HEADER_SECTORS (NUM_RESERVED_SECTORS + NUM_FAT_SECTORS + NUM_ROOT_SECTORS)
+#define FIRST_VALID_FAT_ADDRESS (NUM_ROOT_SECTORS + 1)
+#define NUM_README_SECTORS 1
 
-#define FIRST_VALID_FAT_ADDRESS 2
+enum
+{
+  ALLOCATED_DISK_BLOCK_NUM  = NUM_HEADER_SECTORS + NUM_README_SECTORS, // Number of actual blocks reserved in RAM disk
+  BAD_SECTOR_DISK_BLOCK_NUM = (0x100 - (FIRST_VALID_FAT_ADDRESS + NUM_README_SECTORS)), // Used to line up memory files starting at address 0x0100
+  EXTERNAL_DISK_BLOCK_NUM = 2048, // Number of blocks that exist outside of RAM
+  FAKE_DISK_BLOCK_NUM = 32768     // Report extra space in order to force FAT16 formatting
+};
+#define REPORTED_BLOCK_NUM (ALLOCATED_DISK_BLOCK_NUM + BAD_SECTOR_DISK_BLOCK_NUM + EXTERNAL_DISK_BLOCK_NUM + FAKE_DISK_BLOCK_NUM)
 
 #define VMUS_PER_PLAYER 2
 
@@ -362,7 +364,7 @@ uint8_t msc_disk[ALLOCATED_DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
       0x55, 0xAA
   },
 
-  //------------- Block1-9: FAT16 Table -------------//
+  //------------- Block1-11: FAT16 Table -------------//
   {
       // first 16 bit entry must be FFF8
       U16_TO_U8S_LE(0xFFF8),
@@ -445,12 +447,14 @@ uint8_t msc_disk[ALLOCATED_DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
   {FULL_PAGE_FAT_ENTRY(0x0600)},
   {FULL_PAGE_FAT_ENTRY(0x0700)},
   {FULL_PAGE_FAT_ENTRY(0x0800)},
-  // Some hosts (looking at you, Windows) check if there is empty space available before overwriting
+  // Windows & MacOS check if there is empty space available before overwriting
   // an EXISTING file of the same size. For that fact, 128 kb will look available to fill just so
   // the host proceeds past that check. This area is not actually writeable.
   {},
+  // Windows & MacOS also cache data to the drive, so another (fake) 128 kb is also needed for that.
+  {},
 
-  //------------- Block11: Root Directory -------------//
+  //------------- Block12: Root Directory -------------//
   {
       // first entry is volume label
       VOLUME_ENTRY(),
@@ -458,7 +462,7 @@ uint8_t msc_disk[ALLOCATED_DISK_BLOCK_NUM][DISK_BLOCK_SIZE] =
       SIMPLE_DIR_ENTRY("README  ", "TXT", ATTR1_READ_ONLY, ATTR2_LOWERCASE_EXT, FIRST_VALID_FAT_ADDRESS, README_SIZE),
   },
 
-  //------------- Block12+: File Content -------------//
+  //------------- Block13+: File Content -------------//
   {README_CONTENTS}
 };
 
@@ -839,18 +843,35 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
     {
       // Special case: allow host to write only if it isn't changing important things
       bool ok = true;
+      bool nameTouched = false;
+      bool locTouched = false;
       for (uint32_t idx = offset; idx < offset + bufsize; ++idx, ++addr, ++buffer)
       {
         if (*addr != *buffer)
         {
           uint32_t entryIdx = idx % BYTES_PER_ROOT_ENTRY;
           // If it touches name field or location, that's bad!
-          if ((entryIdx >= 0 && entryIdx <= 10) || entryIdx == 26 || entryIdx == 27)
+          if ((entryIdx >= 0 && entryIdx <= 10))
           {
-            ok = false;
-            break;
+            nameTouched = true;
+          }
+          else if (entryIdx == 26 || entryIdx == 27)
+          {
+            locTouched = true;
+            // Allow the OS to think this file is deleted, don't allow it to change location
+            ok = (*buffer == 0);
+            if (!ok)
+            {
+              break;
+            }
           }
         }
+      }
+
+      if (ok && nameTouched && !locTouched)
+      {
+        // Don't allow rename unless the file is being deleted
+        ok = false;
       }
 
       if (ok)
@@ -864,16 +885,10 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
         numWrite = -1;
       }
     }
-    else if (memcmp(addr, buffer, bufsize) == 0)
-    {
-      // Write ok since it matches
-      numWrite = bufsize;
-    }
     else
     {
-      // Don't allow the host to write
-      tud_msc_set_sense(lun, SCSI_SENSE_DATA_PROTECT, 0x00, 0x06);
-      numWrite = -1;
+      // Just placate the host... it's trying to fix my file system :/
+      numWrite = bufsize;
     }
   }
   else if (lba < ALLOCATED_DISK_BLOCK_NUM + BAD_SECTOR_DISK_BLOCK_NUM)

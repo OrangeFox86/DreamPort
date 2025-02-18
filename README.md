@@ -1,8 +1,8 @@
-# DreamPort (formally DreamcastControllerUsbPico)
+# DreamPicoPort (formally DreamcastControllerUsbPico)
 
-Using a Raspberry Pi Pico, DreamPort enables USB interfacing with a Dreamcast or its controllers and peripherals, functioning in either host mode or client mode as depicted below.
+Using a Raspberry Pi Pico, DreamPicoPort enables USB interfacing with a Dreamcast or its controllers and peripherals, functioning in either host mode or client mode as depicted below.
 
-Looking for instructions on how to use this with flycast? [Bring me to it!](https://github.com/OrangeFox86/DreamPort?tab=readme-ov-file#connecting-the-hardware-for-host-mode) 
+Looking for instructions on how to use this with flycast? [Bring me to it!](https://github.com/OrangeFox86/DreamPicoPort?tab=readme-ov-file#connecting-the-hardware-for-host-mode) 
 
 | Host Mode | Client Mode |
 | -------- | ------- |
@@ -10,7 +10,7 @@ Looking for instructions on how to use this with flycast? [Bring me to it!](http
 
 This platform may easily be forked and adapted for other interfacing needs. Feel free to do so under the conditions of the supplied [LICENSE.md](LICENSE.md).
 
-Refer to the [releases](https://github.com/OrangeFox86/DreamPort/releases) page for current progress. Refer to the [issues](https://github.com/OrangeFox86/DreamPort/issues) tab for things left to be implemented and known bugs.
+Refer to the [releases](https://github.com/OrangeFox86/DreamPicoPort/releases) page for current progress. Refer to the [issues](https://github.com/OrangeFox86/DreamPicoPort/issues) tab for things left to be implemented and known bugs.
 
 ---
 
@@ -75,11 +75,12 @@ For reference, the following is the pinout for the Dreamcast controller port. Ta
 
 ## Selecting the Appropriate Binary
 
-Each [release](https://github.com/OrangeFox86/DreamPort/releases) will contain multiple uf2 files. Currently, there are 3 flavors of these binaries for each of the Pico Version 1 (RP2040) and Pico Version 2 (RP2350) boards. The W variants of the hardware may also be used, but the status LED will not be functional.
+Each [release](https://github.com/OrangeFox86/DreamPicoPort/releases) will contain multiple uf2 files. Currently, there are 4 flavors of these binaries for each of the Pico Version 1 (RP2040) and Pico Version 2 (RP2350) boards. The W variants of the hardware may also be used, but the status LED will not be functional.
 
-- ***host-1p.uf2**: [Host mode](#connecting-the-hardware-for-host-mode) configuration, only `1P` active - all operating systems support this
-- ***host-4p.uf2**: [Host mode](#connecting-the-hardware-for-host-mode) configuration, `1P`, `2P`, `3P`, and `4P` active - this is more problematic when used on Windows as controllers won't properly enumerate
-- ***client-with-usb-host.uf2**: [Client mode](#connecting-the-hardware-for-client-mode) configuration supporting a single Dualshock4 controller connected to the USB port
+- ***host-1p.uf2**: Host mode configuration, only `1P` active
+- ***host-2p.uf2**: Host mode configuration, `1P` and `2P` active
+- ***host-4p.uf2**: Host mode configuration, `1P`, `2P`, `3P`, and `4P` active
+- ***client-with-usb-host.uf2**: Client mode configuration supporting a single Dualshock4 controller connected to the USB port
 
 ## Loading the UF2 Binary
 
@@ -112,8 +113,8 @@ sudo apt -y install build-essential gdb
 
 3. Clone this repo then cd into the created directory
 ```bash
-git clone https://github.com/Tails86/DreamPort.git
-cd DreamPort
+git clone https://github.com/Tails86/DreamPicoPort.git
+cd DreamPicoPort
 ```
 
 4. Pull down the pico SDK (this project now uses a fork of the SDK - it will no longer compile under the standard SDK)
@@ -132,7 +133,7 @@ Hint: if you have issues building, the easiest way to correct any submodule sync
 ./build.sh
 ```
 
-After build completes, binaries should be located under `dist/`. Pre-built release binaries may be found [here](https://github.com/OrangeFox86/DreamPort/releases).
+After build completes, binaries should be located under `dist/`. Pre-built release binaries may be found [here](https://github.com/OrangeFox86/DreamPicoPort/releases).
 
 This project may be opened in vscode. In vscode, the default shortcut `ctrl+shift+b` will build the project. The default shortcut `F5` will run tests with gdb for local debugging. Open the terminal tab after executing tests with debugging to see the results.
 

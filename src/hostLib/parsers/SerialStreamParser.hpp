@@ -35,15 +35,15 @@
 // Command structure: [whitespace]<command-char>[command]<\n>
 
 //! Command parser for processing commands from a TTY stream
-class UsbCdcTtyParser : public TtyParser
+class SerialStreamParser : public TtyParser
 {
 public:
     //! Constructor
-    UsbCdcTtyParser(MutexInterface& m, char helpChar);
+    SerialStreamParser(MutexInterface& m, char helpChar);
     //! Adds a command parser to my list of parsers - must be done before any other function called
-    virtual void addCommandParser(std::shared_ptr<CommandParser> parser) final;
+    virtual void addCommandParser(std::shared_ptr<CommandParser> parser) override final;
     //! Called from the process receiving characters on the TTY
-    void addChars(const char* chars, uint32_t len);
+    void addChars(const char* chars, uint32_t len) override final;
     //! Called from the process handling maple bus execution
     virtual void process() final;
 

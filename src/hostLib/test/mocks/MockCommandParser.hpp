@@ -23,25 +23,19 @@
 
 #pragma once
 
-#include <stdint.h>
-#include "hal/Usb/CommandParser.hpp"
-#include "hal/System/MutexInterface.hpp"
+#include <hal/Usb/CommandParser.hpp>
 
-//! Command parser for processing commands from a TTY stream
-class TtyParser
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
+
+class MockCommandParser : public CommandParser
 {
 public:
-    //! Virtual destructor
-    virtual ~TtyParser() {}
-    //! Adds a command parser to my list of parsers - must be done before any other function called
-    virtual void addCommandParser(std::shared_ptr<CommandParser> parser) = 0;
-    //! Called from the process receiving characters on the TTY
-    virtual void addChars(const char* chars, uint32_t len) = 0;
-    //! Called from the process handling maple bus execution
-    virtual void process() = 0;
-    //! When this character is seen, then binary data will proceed
-    //! For binary commands, 2-byte size followed by payload then final \n character
-    static const char BINARY_START_CHAR = CommandParser::BINARY_START_CHAR;
-};
+    MockCommandParser() = default;
+    virtual ~MockCommandParser() = default;
 
-void usb_cdc_set_parser(TtyParser* parser);
+    MOCK_METHOD(const char*, getCommandChars, (), (override));
+    MOCK_METHOD(void, submit, (const char* chars, uint32_t len), (override));
+    MOCK_METHOD(void, printHelp, (), (override));
+    MOCK_METHOD(bool, hasBinarySupport, (), (const, override));
+};

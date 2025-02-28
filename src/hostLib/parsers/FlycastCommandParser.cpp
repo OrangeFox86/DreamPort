@@ -7,6 +7,12 @@
 #include <string>
 #include <cstdlib>
 
+// Flycast command parser
+// Format: X[modifier-char]<cmd-data>\n
+// This parser must always return a single line of data
+
+const char* FlycastCommandParser::INTERFACE_VERSION = "1.00";
+
 // TODO: this is not the best way to forward declare here
 extern "C" {
     // Using this is a little dicey because buffer overflow will cause lost bytes
@@ -14,12 +20,24 @@ extern "C" {
     void direct_write_cdc(const char *buf, int length);
 }
 
-// Format: X[modifier-char]<cmd-data>\n
-// This parser must always return a single line of data
-
 static void send_response(const std::string& response)
 {
     direct_write_cdc(response.c_str(), response.size());
+}
+
+static void send_response(const char* response)
+{
+    direct_write_cdc(response, strlen(response));
+}
+
+static void send_response(const char* response, int length)
+{
+    direct_write_cdc(response, length);
+}
+
+static void send_response(char response)
+{
+    direct_write_cdc(&response, 1);
 }
 
 // Simple definition of a transmitter which just echos status and received data
@@ -67,6 +85,57 @@ public:
     }
 } flycastEchoTransmitter;
 
+class FlycastBinaryEchoTransmitter : public Transmitter
+{
+public:
+    virtual void txStarted(std::shared_ptr<const Transmission> tx) final
+    {}
+
+    virtual void txFailed(bool writeFailed,
+                          bool readFailed,
+                          std::shared_ptr<const Transmission> tx) final
+    {
+        std::string err;
+        if (writeFailed)
+        {
+            send_response("*failed write\n");
+        }
+        else
+        {
+            send_response("*failed read\n");
+        }
+    }
+
+    virtual void txComplete(std::shared_ptr<const MaplePacket> packet,
+                            std::shared_ptr<const Transmission> tx) final
+    {
+        send_response(CommandParser::BINARY_START_CHAR);
+        uint16_t len = 4 + (packet->payload.size() * 4);
+        send_response(static_cast<uint8_t>(len >> 8));
+        send_response(static_cast<uint8_t>(len & 0xFF));
+        uint8_t frame[4] = {
+            packet->frame.command,
+            packet->frame.recipientAddr,
+            packet->frame.senderAddr,
+            packet->frame.length
+        };
+        send_response(reinterpret_cast<char*>(frame), 4);
+
+        for (uint32_t p : packet->payload)
+        {
+            uint8_t word[4] = {
+                static_cast<uint8_t>(p >> 24),
+                static_cast<uint8_t>((p >> 16) & 0xFF),
+                static_cast<uint8_t>((p >> 8) & 0xFF),
+                static_cast<uint8_t>(p & 0xFF)
+            };
+            send_response(reinterpret_cast<char*>(word), 4);
+        }
+
+        send_response('\n');
+    }
+} flycastBinaryEchoTransmitter;
+
 FlycastCommandParser::FlycastCommandParser(
     SystemIdentification& identification,
     std::shared_ptr<PrioritizedTxScheduler>* schedulers,
@@ -97,20 +166,25 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
         return;
     }
 
+    bool binaryParsed = false;
     bool valid = false;
     const char* eol = chars + len;
     std::vector<uint32_t> words;
     const char* iter = chars + 1; // Skip past 'X' (implied)
 
-    // left strip
-    while (iter < eol && std::isspace(*iter))
+    if (*iter != BINARY_START_CHAR)
     {
-        ++iter;
-    }
-    // right strip
-    while (iter < eol && std::isspace(*(eol - 1)))
-    {
-        --eol;
+        // left strip
+        while (iter < eol && std::isspace(*iter))
+        {
+            ++iter;
+        }
+
+        // right strip
+        while (iter < eol && std::isspace(*(eol - 1)))
+        {
+            --eol;
+        }
     }
 
     // Check for special commanding
@@ -160,8 +234,8 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
             }
             return;
 
-            // XP [0-4] [0-4]
-            case 'P' :
+            // XP [0-4] [0-4] to change displayed port character
+            case 'P':
             {
                 // Remove P
                 ++iter;
@@ -184,7 +258,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
             return;
 
             // XS to return serial
-            case 'S' :
+            case 'S':
             {
                 char buffer[mIdentification.getSerialSize() + 1] = {0};
                 mIdentification.getSerial(buffer, sizeof(buffer) - 1);
@@ -195,7 +269,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
             return;
 
             // X?0, X?1, X?2, or X?3 will print summary for the given node index
-            case '?' :
+            case '?':
             {
                 // Remove question mark
                 ++iter;
@@ -220,6 +294,44 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 }
             }
             return;
+
+            // XV to return interface version
+            case 'V':
+            {
+                send_response(INTERFACE_VERSION);
+                send_response('\n');
+            }
+            return;
+
+            // Handle command as binary instead of ASCII
+            case BINARY_START_CHAR:
+            {
+                // Remove binary start character
+                ++iter;
+
+                // Get size of data
+                int32_t size = ((*iter) << 8) | (*iter);
+                iter += 2;
+
+                while (((iter + 4) <= eol) && (size >= 4))
+                {
+                    uint32_t word =
+                        (static_cast<uint32_t>(*iter) << 24) |
+                        (static_cast<uint32_t>(*(iter + 1)) << 16) |
+                        (static_cast<uint32_t>(*(iter + 2)) << 8) |
+                        static_cast<uint32_t>(*(iter + 3));
+
+                    words.push_back(word);
+
+                    iter += 4;
+                    size -= 4;
+                }
+
+                binaryParsed = true;
+                valid = (size == 0);
+                iter = eol;
+            }
+            break; // break out to parsing below
 
             // Reserved
             case ' ': // Fall through
@@ -321,10 +433,20 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
 
             if (idx >= 0)
             {
+                Transmitter* t;
+                if (binaryParsed)
+                {
+                    t = &flycastBinaryEchoTransmitter;
+                }
+                else
+                {
+                    t = &flycastEchoTransmitter;
+                }
+
                 mSchedulers[idx]->add(
                     PrioritizedTxScheduler::EXTERNAL_TRANSMISSION_PRIORITY,
                     PrioritizedTxScheduler::TX_TIME_ASAP,
-                    &flycastEchoTransmitter,
+                    t,
                     packet,
                     true);
             }

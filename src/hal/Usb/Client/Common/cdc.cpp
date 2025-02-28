@@ -39,18 +39,13 @@
 #include "class/hid/hid_device.h"
 #include "class/cdc/cdc_device.h"
 
-#include "UsbCdcTtyParser.hpp"
+#include <hal/Usb/TtyParser.hpp>
 
+static TtyParser* ttyParser = nullptr;
 
-UsbCdcTtyParser* ttyParser = nullptr;
-
-TtyParser* usb_cdc_create_parser(MutexInterface* m, char helpChar)
+void usb_cdc_set_parser(TtyParser* parser)
 {
-    if (ttyParser == nullptr)
-    {
-        ttyParser = new UsbCdcTtyParser(*m, helpChar);
-    }
-    return ttyParser;
+    ttyParser = parser;
 }
 
 

@@ -21,7 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "UsbCdcTtyParser.hpp"
+#include "SerialStreamParser.hpp"
 #include "hal/System/LockGuard.hpp"
 
 #include <limits>
@@ -29,12 +29,12 @@
 #include <algorithm>
 #include <stdio.h>
 
-const char* UsbCdcTtyParser::WHITESPACE_CHARS = "\r\n\t ";
-const char* UsbCdcTtyParser::INPUT_EOL_CHARS = "\r\n";
-const char UsbCdcTtyParser::RX_EOL_CHAR = '\n';
-const char* UsbCdcTtyParser::BACKSPACE_CHARS = "\x08\x7F";
+const char* SerialStreamParser::WHITESPACE_CHARS = "\r\n\t ";
+const char* SerialStreamParser::INPUT_EOL_CHARS = "\r\n";
+const char SerialStreamParser::RX_EOL_CHAR = '\n';
+const char* SerialStreamParser::BACKSPACE_CHARS = "\x08\x7F";
 
-UsbCdcTtyParser::UsbCdcTtyParser(MutexInterface& m, char helpChar) :
+SerialStreamParser::SerialStreamParser(MutexInterface& m, char helpChar) :
     mParserRx(),
     mLastIsEol(false),
     mParserMutex(m),
@@ -44,12 +44,12 @@ UsbCdcTtyParser::UsbCdcTtyParser(MutexInterface& m, char helpChar) :
     mOverflowDetected(false)
 {}
 
-void UsbCdcTtyParser::addCommandParser(std::shared_ptr<CommandParser> parser)
+void SerialStreamParser::addCommandParser(std::shared_ptr<CommandParser> parser)
 {
     mParsers.push_back(parser);
 }
 
-void UsbCdcTtyParser::addChars(const char* chars, uint32_t len)
+void SerialStreamParser::addChars(const char* chars, uint32_t len)
 {
     // Entire function is locked
     LockGuard lockGuard(mParserMutex);
@@ -85,9 +85,10 @@ void UsbCdcTtyParser::addChars(const char* chars, uint32_t len)
                 else
                 {
                     // We still captured a full command, so at least leave that for processing
-                    mParserRx.erase((lastEnd + 1).base(), mParserRx.end());
+                    mParserRx.erase(lastEnd.base(), mParserRx.end());
                 }
                 mOverflowDetected = false;
+                mLastIsEol = true;
             }
             else
             {
@@ -120,7 +121,7 @@ void UsbCdcTtyParser::addChars(const char* chars, uint32_t len)
     }
 }
 
-void UsbCdcTtyParser::process()
+void SerialStreamParser::process()
 {
     // Only do something if a command is ready
     if (mCommandReady)

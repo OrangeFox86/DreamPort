@@ -33,9 +33,6 @@ public:
     //! Prints help message for this command
     virtual void printHelp() final;
 
-    //! @return true because this parser has binary support
-    virtual inline bool hasBinarySupport() const override final { return true; }
-
 private:
     static const char* INTERFACE_VERSION;
     SystemIdentification& mIdentification;

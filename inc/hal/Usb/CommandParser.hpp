@@ -46,9 +46,6 @@ public:
     //! Prints help message for this command
     virtual void printHelp() = 0;
 
-    //! @return true when this parser contains binary parsing support
-    virtual inline bool hasBinarySupport() const { return false; }
-
     //! When this character is seen, then binary data will proceed
     //! For binary commands, 2-byte size followed by payload then final \n character
     static const char BINARY_START_CHAR = 0x05;

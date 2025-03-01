@@ -310,7 +310,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 ++iter;
 
                 // Get size of data
-                int32_t size = ((*iter) << 8) | (*iter);
+                int32_t size = ((*iter) << 8) | (*(iter + 1));
                 iter += 2;
 
                 while (((iter + 4) <= eol) && (size >= 4))

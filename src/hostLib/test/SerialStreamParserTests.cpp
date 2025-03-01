@@ -36,6 +36,7 @@ using ::testing::SetArgReferee;
 using ::testing::DoAll;
 using ::testing::StrEq;
 using ::testing::AnyNumber;
+using ::testing::Invoke;
 
 class SerialStreamParserTest : public ::testing::Test
 {
@@ -64,11 +65,80 @@ TEST_F(SerialStreamParserTest, partial_command__no_action)
     const std::string chars("XThis is a partial command without newline");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit).Times(0);
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), chars.size());
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_partial_command__no_action)
+{
+    // Arrange
+    const std::string chars =
+        std::string("X") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string("This is binary data which isn't complete");
+    serialStreamParser->addChars(chars.c_str(), chars.size());
+
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
+
+    // Act
+    serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), chars.size());
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_complete_without_newline__no_action)
+{
+    // Arrange
+    const std::string chars =
+        std::string("X") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(100, '\n');
+    serialStreamParser->addChars(chars.c_str(), chars.size());
+
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
+
+    // Act
+    serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), chars.size());
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, full_command__submitted)
@@ -77,11 +147,53 @@ TEST_F(SerialStreamParserTest, full_command__submitted)
     const std::string chars("XThis is a full command\n");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit(StrEq("XThis is a full command"), chars.size() - 1)).Times(1);
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    ASSERT_EQ(receivedStrings.size(), 1);
+    EXPECT_EQ(*receivedStrings.begin(), std::string("XThis is a full command"));
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_full_command__submitted)
+{
+    // Arrange
+    const std::string chars =
+        std::string("X") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(100, '\n') +
+        std::string(1, '\n');
+    serialStreamParser->addChars(chars.c_str(), chars.size());
+
+    std::string received;
+    EXPECT_CALL(*mockCmdParser, submit).Times(1).WillOnce(Invoke(
+        [&received]
+        (const char* chars, uint32_t len) -> void
+        {
+            received = std::string(chars, len);
+        }
+    ));
+
+    // Act
+    serialStreamParser->process();
+
+    // Assert
+    EXPECT_EQ(received, chars.substr(0, chars.size() - 1));
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, full_command_over_two_messages__submitted)
@@ -92,11 +204,57 @@ TEST_F(SerialStreamParserTest, full_command_over_two_messages__submitted)
     const std::string chars2("ll command\n");
     serialStreamParser->addChars(chars2.c_str(), chars2.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit(StrEq("YThis is a full command"), chars1.size() + chars2.size() - 1)).Times(1);
+    std::string received;
+    EXPECT_CALL(*mockCmdParser, submit).Times(1).WillOnce(Invoke(
+        [&received]
+        (const char* chars, uint32_t len) -> void
+        {
+            received = std::string(chars, len);
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    EXPECT_EQ(received, std::string("YThis is a full command"));
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_full_command_over_two_messages__submitted)
+{
+    // Arrange
+    const std::string chars1 =
+        std::string("Y") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(50, '\n');
+    serialStreamParser->addChars(chars1.c_str(), chars1.size());
+    const std::string chars2 =
+        std::string(50, '\n') +
+        std::string(1, '\n');
+    serialStreamParser->addChars(chars2.c_str(), chars2.size());
+
+    std::string received;
+    EXPECT_CALL(*mockCmdParser, submit).Times(1).WillOnce(Invoke(
+        [&received]
+        (const char* chars, uint32_t len) -> void
+        {
+            received = std::string(chars, len);
+        }
+    ));
+
+    // Act
+    serialStreamParser->process();
+
+    // Assert
+    std::string expected = chars1 + chars2;
+    expected = expected.substr(0, expected.size() - 1);
+    EXPECT_EQ(received, expected);
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, multiple_command__overflow)
@@ -111,9 +269,15 @@ TEST_F(SerialStreamParserTest, multiple_command__overflow)
     const std::string chars2("XThis command will overflow the parser\n");
     serialStreamParser->addChars(chars2.c_str(), chars2.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit).Times(0); // No other calls expected
-    EXPECT_CALL(*mockCmdParser, submit(StrEq("ZThis is a full command"), chars1.size() - 1)).Times(count);
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            std::string s(chars, len);
+            receivedStrings.push_back(std::move(s));
+        }
+    ));
 
     // Act
     for (std::size_t i = 0; i < count; ++i)
@@ -121,6 +285,67 @@ TEST_F(SerialStreamParserTest, multiple_command__overflow)
         serialStreamParser->process();
     }
     serialStreamParser->process();
+
+    // Assert
+    ASSERT_EQ(receivedStrings.size(), count);
+    const std::string expected("ZThis is a full command");
+    for (const std::string& s : receivedStrings)
+    {
+        EXPECT_EQ(s, expected);
+    }
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_multiple_command__overflow)
+{
+    // Arrange
+    const std::string chars1 =
+        std::string("X") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(100, '\n') +
+        std::string(1, '\n');
+    const std::size_t count = 2048 / chars1.size();
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        serialStreamParser->addChars(chars1.c_str(), chars1.size());
+    }
+    const std::string chars2 =
+        std::string("Y") +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(100, '\n') +
+        std::string(1, '\n');
+    serialStreamParser->addChars(chars2.c_str(), chars2.size());
+
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
+
+    // Act
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        serialStreamParser->process();
+    }
+    serialStreamParser->process();
+
+    // Assert
+    ASSERT_EQ(receivedStrings.size(), count);
+    const std::string expected = chars1.substr(0, chars1.size() - 1);
+    for (const std::string& s : receivedStrings)
+    {
+        EXPECT_EQ(s, expected);
+    }
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, single_command__overflow)
@@ -129,11 +354,52 @@ TEST_F(SerialStreamParserTest, single_command__overflow)
     const std::string chars = std::string(2049, 'X') + std::string("\n");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit).Times(0);
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
+}
+
+TEST_F(SerialStreamParserTest, binary_single_command__overflow)
+{
+    // Arrange
+    const std::string chars =
+        std::string(2000, 'X') +
+        std::string(1, TtyParser::BINARY_START_CHAR) +
+        std::string(1, 0) +
+        std::string(1, 100) +
+        std::string(100, '\n') +
+        std::string(1, '\n');
+    serialStreamParser->addChars(chars.c_str(), chars.size());
+
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
+
+    // Act
+    serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, full_command_with_backspaces__submitted)
@@ -142,11 +408,22 @@ TEST_F(SerialStreamParserTest, full_command_with_backspaces__submitted)
     const std::string chars("XThis is a fullly\x08\x08 command\n");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit(StrEq("XThis is a full command"), 23)).Times(1);
+    std::string received;
+    EXPECT_CALL(*mockCmdParser, submit).Times(1).WillOnce(Invoke(
+        [&received]
+        (const char* chars, uint32_t len) -> void
+        {
+            received = std::string(chars, len);
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    EXPECT_EQ(received, std::string("XThis is a full command"));
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }
 
 TEST_F(SerialStreamParserTest, help)
@@ -168,9 +445,20 @@ TEST_F(SerialStreamParserTest, invalid_command)
     const std::string chars("QThis command won't be processed\n");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
-    // Assert
-    EXPECT_CALL(*mockCmdParser, submit).Times(0);
+    std::list<std::string> receivedStrings;
+    EXPECT_CALL(*mockCmdParser, submit).WillRepeatedly(Invoke(
+        [&receivedStrings]
+        (const char* chars, uint32_t len) -> void
+        {
+            receivedStrings.push_back(std::string(chars, len));
+        }
+    ));
 
     // Act
     serialStreamParser->process();
+
+    // Assert
+    EXPECT_TRUE(receivedStrings.empty());
+    EXPECT_EQ(serialStreamParser->numBufferedChars(), 0);
+    EXPECT_EQ(serialStreamParser->numBufferedCmds(), 0);
 }

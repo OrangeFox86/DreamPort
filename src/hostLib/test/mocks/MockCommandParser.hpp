@@ -37,5 +37,4 @@ public:
     MOCK_METHOD(const char*, getCommandChars, (), (override));
     MOCK_METHOD(void, submit, (const char* chars, uint32_t len), (override));
     MOCK_METHOD(void, printHelp, (), (override));
-    MOCK_METHOD(bool, hasBinarySupport, (), (const, override));
 };

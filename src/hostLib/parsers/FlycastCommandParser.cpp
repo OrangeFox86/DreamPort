@@ -172,14 +172,14 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
     std::vector<uint32_t> words;
     const char* iter = chars + 1; // Skip past 'X' (implied)
 
+    // left strip
+    while (iter < eol && std::isspace(*iter))
+    {
+        ++iter;
+    }
+
     if (*iter != BINARY_START_CHAR)
     {
-        // left strip
-        while (iter < eol && std::isspace(*iter))
-        {
-            ++iter;
-        }
-
         // right strip
         while (iter < eol && std::isspace(*(eol - 1)))
         {

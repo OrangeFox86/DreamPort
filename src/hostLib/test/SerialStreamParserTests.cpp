@@ -88,9 +88,9 @@ TEST_F(SerialStreamParserTest, binary_partial_command__no_action)
     // Arrange
     const std::string chars =
         std::string("X") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string("This is binary data which isn't complete");
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
@@ -117,9 +117,9 @@ TEST_F(SerialStreamParserTest, binary_complete_without_newline__no_action)
     // Arrange
     const std::string chars =
         std::string("X") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(100, '\n');
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
@@ -171,11 +171,11 @@ TEST_F(SerialStreamParserTest, binary_full_command__submitted)
     // Arrange
     const std::string chars =
         std::string("X") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(100, '\n') +
-        std::string(1, '\n');
+        '\n';
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
     std::string received;
@@ -227,14 +227,14 @@ TEST_F(SerialStreamParserTest, binary_full_command_over_two_messages__submitted)
     // Arrange
     const std::string chars1 =
         std::string("Y") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(50, '\n');
     serialStreamParser->addChars(chars1.c_str(), chars1.size());
     const std::string chars2 =
         std::string(50, '\n') +
-        std::string(1, '\n');
+        '\n';
     serialStreamParser->addChars(chars2.c_str(), chars2.size());
 
     std::string received;
@@ -302,11 +302,11 @@ TEST_F(SerialStreamParserTest, binary_multiple_command__overflow)
     // Arrange
     const std::string chars1 =
         std::string("X") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(100, '\n') +
-        std::string(1, '\n');
+        '\n';
     const std::size_t count = 2048 / chars1.size();
     for (std::size_t i = 0; i < count; ++i)
     {
@@ -314,11 +314,11 @@ TEST_F(SerialStreamParserTest, binary_multiple_command__overflow)
     }
     const std::string chars2 =
         std::string("Y") +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(100, '\n') +
-        std::string(1, '\n');
+        '\n';
     serialStreamParser->addChars(chars2.c_str(), chars2.size());
 
     std::list<std::string> receivedStrings;
@@ -377,11 +377,11 @@ TEST_F(SerialStreamParserTest, binary_single_command__overflow)
     // Arrange
     const std::string chars =
         std::string(2000, 'X') +
-        std::string(1, TtyParser::BINARY_START_CHAR) +
-        std::string(1, 0) +
-        std::string(1, 100) +
+        TtyParser::BINARY_START_CHAR +
+        static_cast<char>(0) +
+        static_cast<char>(100) +
         std::string(100, '\n') +
-        std::string(1, '\n');
+        '\n';
     serialStreamParser->addChars(chars.c_str(), chars.size());
 
     std::list<std::string> receivedStrings;

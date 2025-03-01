@@ -21,6 +21,6 @@ else()
   add_definitions(-DUNITTEST)
 endif()
 
-project(DreamPort)
+project(DreamPicoPort)
 
 add_subdirectory(src)

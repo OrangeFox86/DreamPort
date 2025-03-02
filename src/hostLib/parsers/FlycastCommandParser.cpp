@@ -158,6 +158,45 @@ const char* FlycastCommandParser::getCommandChars()
     return "X";
 }
 
+uint32_t parseWord(const char*& iter, const char* eol, uint32_t& i)
+{
+    uint32_t word = 0;
+    i = 0;
+    while (i < 8 && iter < eol)
+    {
+        char v = *iter++;
+        uint_fast8_t value = 0;
+
+        if (v >= '0' && v <= '9')
+        {
+            value = v - '0';
+        }
+        else if (v >= 'a' && v <= 'f')
+        {
+            value = v - 'a' + 0xa;
+        }
+        else if (v >= 'A' && v <= 'F')
+        {
+            value = v - 'A' + 0xA;
+        }
+        else
+        {
+            // Ignore this character
+            continue;
+        }
+
+        // Apply value into current word
+        word |= (value << ((8 - i) * 4 - 4));
+        ++i;
+    }
+
+    if (i == 8)
+    {
+        return word;
+    }
+    return 0;
+}
+
 void FlycastCommandParser::submit(const char* chars, uint32_t len)
 {
     if (len == 0)
@@ -169,7 +208,8 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
     bool binaryParsed = false;
     bool valid = false;
     const char* eol = chars + len;
-    std::vector<uint32_t> words;
+    MaplePacket::Frame frameWord = MaplePacket::Frame::defaultFrame();
+    std::vector<uint32_t> payloadWords;
     const char* iter = chars + 1; // Skip past 'X' (implied)
 
     // left strip
@@ -313,22 +353,38 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 int32_t size = ((*iter) << 8) | (*(iter + 1));
                 iter += 2;
 
-                while (((iter + 4) <= eol) && (size >= 4))
+                if (size >= 4)
                 {
-                    uint32_t word =
-                        (static_cast<uint32_t>(*iter) << 24) |
-                        (static_cast<uint32_t>(*(iter + 1)) << 16) |
-                        (static_cast<uint32_t>(*(iter + 2)) << 8) |
-                        static_cast<uint32_t>(*(iter + 3));
-
-                    words.push_back(word);
-
-                    iter += 4;
+                    frameWord.command = *iter++;
+                    frameWord.recipientAddr = *iter++;
+                    frameWord.senderAddr = *iter++;
+                    frameWord.length = *iter++;
                     size -= 4;
+
+                    payloadWords.reserve(size / 4);
+
+                    while (((iter + 4) <= eol) && (size >= 4))
+                    {
+                        uint32_t word =
+                            (static_cast<uint32_t>(*iter) << 24) |
+                            (static_cast<uint32_t>(*(iter + 1)) << 16) |
+                            (static_cast<uint32_t>(*(iter + 2)) << 8) |
+                            static_cast<uint32_t>(*(iter + 3));
+
+                        payloadWords.push_back(word);
+
+                        iter += 4;
+                        size -= 4;
+                    }
+
+                    binaryParsed = true;
+                    valid = (size == 0);
+                }
+                else
+                {
+                    valid = false;
                 }
 
-                binaryParsed = true;
-                valid = (size == 0);
                 iter = eol;
             }
             break; // break out to parsing below
@@ -363,50 +419,36 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
         }
     }
 
-    while (iter < eol)
+    if (!binaryParsed)
     {
-        uint32_t word = 0;
         uint32_t i = 0;
-        while (i < 8 && iter < eol)
-        {
-            char v = *iter++;
-            uint_fast8_t value = 0;
-
-            if (v >= '0' && v <= '9')
-            {
-                value = v - '0';
-            }
-            else if (v >= 'a' && v <= 'f')
-            {
-                value = v - 'a' + 0xa;
-            }
-            else if (v >= 'A' && v <= 'F')
-            {
-                value = v - 'A' + 0xA;
-            }
-            else
-            {
-                // Ignore this character
-                continue;
-            }
-
-            // Apply value into current word
-            word |= (value << ((8 - i) * 4 - 4));
-            ++i;
-        }
-
-        // Invalid if a partial word was given
-        valid = ((i == 8) || (i == 0));
-
+        uint32_t firstWord = parseWord(iter, eol, i);
         if (i == 8)
         {
-            words.push_back(word);
+            frameWord = MaplePacket::Frame::fromWord(firstWord);
+
+            while (iter < eol)
+            {
+                uint32_t word = parseWord(iter, eol, i);
+
+                // Invalid if a partial word was given
+                valid = ((i == 8) || (i == 0));
+
+                if (i == 8)
+                {
+                    payloadWords.push_back(word);
+                }
+            }
+        }
+        else
+        {
+            valid = false;
         }
     }
 
     if (valid)
     {
-        MaplePacket packet(&words[0], words.size());
+        MaplePacket packet(frameWord, std::move(payloadWords));
         if (packet.isValid())
         {
             uint8_t sender = packet.frame.senderAddr;
@@ -448,7 +490,8 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                     PrioritizedTxScheduler::TX_TIME_ASAP,
                     t,
                     packet,
-                    true);
+                    true,
+                    150); // The max (used for timeout value)
             }
             else
             {

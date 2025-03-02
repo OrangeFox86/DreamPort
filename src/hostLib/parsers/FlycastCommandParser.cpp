@@ -490,8 +490,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                     PrioritizedTxScheduler::TX_TIME_ASAP,
                     t,
                     packet,
-                    true,
-                    150); // The max (used for timeout value)
+                    true);
             }
             else
             {

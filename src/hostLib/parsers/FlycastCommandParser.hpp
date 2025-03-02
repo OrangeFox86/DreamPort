@@ -34,6 +34,7 @@ public:
     virtual void printHelp() final;
 
 private:
+    static const char* INTERFACE_VERSION;
     SystemIdentification& mIdentification;
     std::shared_ptr<PrioritizedTxScheduler>* const mSchedulers;
     const uint8_t* const mSenderAddresses;

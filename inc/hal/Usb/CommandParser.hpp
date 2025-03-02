@@ -50,3 +50,6 @@ public:
     //! For binary commands, 2-byte size followed by payload then final \n character
     static const char BINARY_START_CHAR = 0x05;
 };
+
+void usb_cdc_write(const char *buf, int length);
+void usb_cdc_set_echo(bool on);

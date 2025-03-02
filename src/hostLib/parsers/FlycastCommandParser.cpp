@@ -13,31 +13,24 @@
 
 const char* FlycastCommandParser::INTERFACE_VERSION = "1.00";
 
-// TODO: this is not the best way to forward declare here
-extern "C" {
-    // Using this is a little dicey because buffer overflow will cause lost bytes
-    // buffer is set to 2100 which should handle any command or response
-    void direct_write_cdc(const char *buf, int length);
-}
-
 static void send_response(const std::string& response)
 {
-    direct_write_cdc(response.c_str(), response.size());
+    usb_cdc_write(response.c_str(), response.size());
 }
 
 static void send_response(const char* response)
 {
-    direct_write_cdc(response, strlen(response));
+    usb_cdc_write(response, strlen(response));
 }
 
 static void send_response(const char* response, int length)
 {
-    direct_write_cdc(response, length);
+    usb_cdc_write(response, length);
 }
 
 static void send_response(char response)
 {
-    direct_write_cdc(&response, 1);
+    usb_cdc_write(&response, 1);
 }
 
 // Simple definition of a transmitter which just echos status and received data
@@ -343,6 +336,39 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
             }
             return;
 
+            // XH0 for echo off, XH1 for echo on
+            case 'H':
+            {
+                // Remove E
+                ++iter;
+                int on = -1;
+                if (iter < eol)
+                {
+                    std::string number;
+                    number.assign(iter, eol - iter);
+                    if (0 == sscanf(iter, "%i", &on))
+                    {
+                        on = -1;
+                    }
+                }
+
+                if (on > 0)
+                {
+                    usb_cdc_set_echo(true);
+                    send_response("ECHO ON\n");
+                }
+                else if (on == 0)
+                {
+                    usb_cdc_set_echo(false);
+                    send_response("ECHO OFF\n");
+                }
+                else
+                {
+                    send_response("*failed invalid command\n");
+                }
+            }
+            return;
+
             // Handle command as binary instead of ASCII
             case BINARY_START_CHAR:
             {
@@ -426,6 +452,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
         if (i == 8)
         {
             frameWord = MaplePacket::Frame::fromWord(firstWord);
+            valid = true;
 
             while (iter < eol)
             {

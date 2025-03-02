@@ -41,11 +41,26 @@
 
 #include <hal/Usb/TtyParser.hpp>
 
+static bool echoOn = true;
 static TtyParser* ttyParser = nullptr;
 
 void usb_cdc_set_parser(TtyParser* parser)
 {
     ttyParser = parser;
+}
+
+void usb_cdc_set_echo(bool on)
+{
+    echoOn = on;
+}
+
+void usb_cdc_write(const char *buf, int length)
+{
+#if CFG_TUD_CDC
+    tud_cdc_write(buf, length);
+    tud_task();
+    tud_cdc_write_flush();
+#endif
 }
 
 
@@ -59,13 +74,6 @@ static MutexInterface* stdioMutex = nullptr;
 #include "pico/stdio.h"
 #include "pico/stdio/driver.h"
 extern "C" {
-
-void direct_write_cdc(const char *buf, int length)
-{
-    tud_cdc_write(buf, length);
-    tud_task();
-    tud_cdc_write_flush();
-}
 
 static void stdio_usb_out_chars2(const char *buf, int length)
 {
@@ -162,8 +170,11 @@ void cdc_task()
 
             if (count > 0)
             {
-                // Echo back (no crlf processing since calling directly)
-                stdio_usb_out_chars2(buf, count);
+                if (echoOn)
+                {
+                    // Echo back (no crlf processing since calling directly)
+                    stdio_usb_out_chars2(buf, count);
+                }
                 // Add to parser
                 ttyParser->addChars(buf, count);
             }

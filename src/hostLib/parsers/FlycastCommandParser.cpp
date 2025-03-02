@@ -352,7 +352,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                     }
                 }
 
-                if (on > 0)
+                if (on == 1)
                 {
                     usb_cdc_set_echo(true);
                     send_response("ECHO ON\n");
@@ -364,7 +364,7 @@ void FlycastCommandParser::submit(const char* chars, uint32_t len)
                 }
                 else
                 {
-                    send_response("*failed invalid command\n");
+                    send_response("*failed invalid data\n");
                 }
             }
             return;
